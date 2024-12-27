@@ -7,7 +7,7 @@ meant to be a drop-in replacement.
 
 ## Documentation
 
-Docs are available at <https://willibutz.github.io/preservation>
+Docs are available at <https://nix-community.github.io/preservation>
 
 ## Prerequisites
 

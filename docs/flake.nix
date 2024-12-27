@@ -32,7 +32,7 @@
                     if pkgs.lib.hasPrefix "${flakeOutPath}/" declaration then
                       {
                         inherit name;
-                        url = "https://github.com/willibutz/preservation/blob/main/${name}";
+                        url = "https://github.com/nix-community/preservation/blob/main/${name}";
                       }
                     else
                       declaration
