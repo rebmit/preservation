@@ -24,8 +24,7 @@ See [Configuration Options](./configuration-options.md) for all available option
         "/var/lib/systemd/timers"
         # NixOS user state
         "/var/lib/nixos"
-        # preparing /var/log early (inInitrd) avoids a dependency cycle (see TODO.md)
-        { directory = "/var/log"; inInitrd = true; }
+        "/var/log"
       ];
     };
   };
@@ -120,10 +119,8 @@ mount created by system to the persistent volume.
         "/var/lib/systemd/coredump"
         "/var/lib/systemd/rfkill"
         "/var/lib/systemd/timers"
+        "/var/log"
         { directory = "/var/lib/nixos"; inInitrd = true; }
-
-        # preparing /var/log early (inInitrd) avoids a dependency cycle (see TODO.md)
-        { directory =  "/var/log"; inInitrd = true; }
       ];
 
       # preserve system files
