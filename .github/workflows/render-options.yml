@@ -15,10 +15,6 @@ jobs:
         with:
           diagnostic-endpoint: ""
 
-      - uses: DeterminateSystems/magic-nix-cache-action@b46e247b898aa56e6d2d2e728dc6df6c84fdb738
-        with:
-          diagnostic-endpoint: ""
-
       - run: nix build -L ./docs#packages.x86_64-linux.docs
 
       - uses: peaceiris/actions-gh-pages@v4
