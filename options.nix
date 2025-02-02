@@ -355,9 +355,6 @@ let
           '';
         };
       };
-      config = {
-        _module.args.name = lib.mkOverride 1499 "‹user›";
-      };
     };
 
   preserveAtSubmodule =
@@ -419,7 +416,10 @@ let
           '';
         };
         users = lib.mkOption {
-          type = with lib.types; attrsOf (submodule userModule);
+          type = with lib.types; attrsWith {
+            placeholder = "user";
+            elemType = submodule userModule;
+          };
           default = { };
           description = ''
             Specify a set of users with corresponding files and directories that
@@ -452,7 +452,10 @@ in
     enable = lib.mkEnableOption "the preservation module";
 
     preserveAt = lib.mkOption {
-      type = with lib.types; attrsOf (submodule preserveAtSubmodule);
+      type = with lib.types; attrsWith {
+        placeholder = "path";
+        elemType = submodule preserveAtSubmodule;
+      };
       description = ''
         Specify a set of locations and the corresponding state that
         should be preserved there.
