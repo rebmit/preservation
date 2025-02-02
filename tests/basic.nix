@@ -18,6 +18,9 @@ in
         enable = true;
         # all files and directories are preserved under "/state" in this test
         preserveAt."/state" = {
+          commonMountOptions = [
+            "x-foo"
+          ];
           directories = [
             "/var/lib/someservice"
             "/var/log"
@@ -36,12 +39,18 @@ in
               ];
             };
             butz = {
+              commonMountOptions = [
+                "x-bar"
+              ];
               files = [
                 { file = ".config/foo"; mode = "0600"; }
                 "bar"
                 # an empty file with may be created at the symlink's
                 # target, i.e. on the persistent volume
                 { file = ".symlinks/baz"; how = "symlink"; createLinkTarget = true; }
+                # this file should be mounted and with the combination of all three
+                # configured `x-foo`, `x-bar` and `x-baz`.
+                { file = "yay_userspace_mount_options"; mountOptions = [ "x-baz" ]; }
               ];
               directories = [
                 "unshaved_yaks"
@@ -215,6 +224,11 @@ in
       with subtest("Type, permissions and ownership after reboot"):
         for file in all_files:
           check_file(file)
+
+      with subtest("Custom (userspace) mount options are applied"):
+        utab_entry = machine.succeed("grep TARGET=/home/butz/yay_userspace_mount_options /run/mount/utab")
+        for opt in [ "x-foo", "x-bar", "x-baz"]:
+          assert opt in utab_entry,f"{opt} not found in {utab_entry}"
 
       machine.shutdown()
     '';

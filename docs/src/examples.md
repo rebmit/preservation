@@ -139,6 +139,9 @@ mount created by system to the persistent volume.
       # preserve user-specific files, implies ownership
       users = {
         butz = {
+          commonMountOptions = [
+            "x-gvfs-hide"
+          ];
           directories = [
             { directory = ".ssh"; mode = "0700"; }
             ".config/syncthing"

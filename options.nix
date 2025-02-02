@@ -315,7 +315,10 @@ let
             with lib.types;
             listOf (
               coercedTo str (d: { directory = d; }) (submodule [
-                { _module.args.defaultOwner = attrs.config.username; }
+                {
+                  _module.args.defaultOwner = attrs.config.username;
+                  mountOptions = attrs.config.commonMountOptions;
+                }
                 directoryPath
               ])
             );
@@ -332,7 +335,10 @@ let
             with lib.types;
             listOf (
               coercedTo str (f: { file = f; }) (submodule [
-                { _module.args.defaultOwner = attrs.config.username; }
+                {
+                  _module.args.defaultOwner = attrs.config.username;
+                  mountOptions = attrs.config.commonMountOptions;
+                }
                 filePath
               ])
             );
@@ -352,6 +358,21 @@ let
               "bar"
             ]
             ```
+          '';
+        };
+        commonMountOptions = lib.mkOption {
+          type = with lib.types; listOf (coercedTo str (n: { name = n; }) mountOption);
+          default = [];
+          example = [
+            "x-gvfs-hide"
+            "x-gdu.hide"
+          ];
+          description = ''
+            Specify a list of mount options that should be added to all files and directories
+            of this user, for which {option}`how` is set to `bindmount`.
+
+            See also the top level {option}`commonMountOptions` and the invdividual
+            {option}`mountOptions` that is available per file / directory.
           '';
         };
       };
@@ -375,7 +396,10 @@ let
             with lib.types;
             listOf (
               coercedTo str (d: { directory = d; }) (submodule [
-                { _module.args.defaultOwner = "root"; }
+                {
+                  _module.args.defaultOwner = "root";
+                  mountOptions = attrs.config.commonMountOptions;
+                }
                 directoryPath
               ])
             );
@@ -391,7 +415,10 @@ let
             with lib.types;
             listOf (
               coercedTo str (f: { file = f; }) (submodule [
-                { _module.args.defaultOwner = "root"; }
+                {
+                  _module.args.defaultOwner = "root";
+                  mountOptions = attrs.config.commonMountOptions;
+                }
                 filePath
               ])
             );
@@ -418,7 +445,10 @@ let
         users = lib.mkOption {
           type = with lib.types; attrsWith {
             placeholder = "user";
-            elemType = submodule userModule;
+            elemType = submodule [
+              { commonMountOptions = attrs.config.commonMountOptions; }
+              userModule
+            ];
           };
           default = { };
           description = ''
@@ -441,6 +471,21 @@ let
               };
             }
             ```
+          '';
+        };
+        commonMountOptions = lib.mkOption {
+          type = with lib.types; listOf (coercedTo str (n: { name = n; }) mountOption);
+          default = [];
+          example = [
+            "x-gvfs-hide"
+            "x-gdu.hide"
+          ];
+          description = ''
+            Specify a list of mount options that should be added to all files and directories
+            under this preservation prefix, for which {option}`how` is set to `bindmount`.
+
+            See also {option}`commonMountOptions` under {option}`users` and the invdividual
+            {option}`mountOptions` that is available per file / directory.
           '';
         };
       };
