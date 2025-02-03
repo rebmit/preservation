@@ -33,3 +33,10 @@ Preservation's configuration is based on, and very similar to that of impermanen
 Preservation uses a global `enable` option, impermanence does not.
 
 For thoughts on the `enable` option, see the discussion at <https://github.com/nix-community/impermanence/pull/171> and for available configuration options see [Configuration Options](./configuration-options.md).
+
+### No generic `hideMounts` option
+
+Preservation does not provide the same `hideMounts` option as impermanence, which would set the mount option `x-gvfs-hide` for bind-mounts.
+Instead, preservation allows for the configuration of arbitrary mount options that are propagated to all bind-mounts, both on the top level
+of a preserved prefix, and on the per-user level. This can be done via `commonMountOptions` and would for example enable users to choose
+between `x-gvfs-hide` and `x-gdu.hide`.
