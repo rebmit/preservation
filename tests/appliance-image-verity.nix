@@ -125,7 +125,7 @@ pkgs:
         "-f",
         "qcow2",
         "-b",
-        "${nodes.machine.system.build.finalImage}/${nodes.machine.image.repart.imageFile}",
+        "${nodes.machine.system.build.finalImage}/${nodes.machine.image.fileName}",
         "-F",
         "raw",
         tmp_disk_image.name,

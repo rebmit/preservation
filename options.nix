@@ -1,6 +1,11 @@
 { config, lib, ... }:
 
 let
+  inherit (import ./lib.nix { inherit lib; })
+    mkIntermediateUserDirectories
+    concatTwoPaths
+    ;
+
   mountOption = lib.types.submodule {
     options = {
       name = lib.mkOption {
@@ -34,10 +39,22 @@ let
           type = lib.types.enum [
             "bindmount"
             "symlink"
+            "_intermediate" # TODO find a better name. maybe "structure"?
           ];
           default = "bindmount";
           description = ''
             Specify how this directory should be preserved.
+
+            1. Either a directory is created both on the volatile and on the
+            persistent volume, with a bind mount from the former to the
+            latter.
+
+            2. Or a symlink is created on the volatile volume, pointing
+            to the corresponding location on the persistent volume.
+
+            3. Finally the option `_intermediate` exists to handle directories
+            which are supposed to be created on both the volatile and persistent
+            volume, but without any preservation of them specifically.
           '';
         };
         user = lib.mkOption {
@@ -65,7 +82,12 @@ let
         };
         configureParent = lib.mkOption {
           type = lib.types.bool;
-          default = attrs.config.how == "symlink" && attrs.config.user != "root";
+          default =
+            let
+              isUserSymlink = attrs.config.how == "symlink" && attrs.config.user != "root";
+              notOnTopLevel = !builtins.isNull (builtins.match ".+/.*" attrs.config.directory);
+            in
+            isUserSymlink && notOnTopLevel;
           description = ''
             Specify whether the parent directory of this directory shall be configured with
             custom ownership and permissions.
@@ -203,7 +225,12 @@ let
         };
         configureParent = lib.mkOption {
           type = lib.types.bool;
-          default = attrs.config.how == "symlink" && attrs.config.user != "root";
+          default =
+            let
+              isUserSymlink = attrs.config.how == "symlink" && attrs.config.user != "root";
+              notOnTopLevel = !builtins.isNull (builtins.match ".+/.*" attrs.config.file);
+            in
+            isUserSymlink && notOnTopLevel;
           description = ''
             Specify whether the parent directory of this file shall be configured with
             custom ownership and permissions.
@@ -304,7 +331,7 @@ let
         };
         home = lib.mkOption {
           type = with lib.types; passwdEntry path;
-          default = config.users.users.${name}.home;
+          default = config.users.users.${attrs.config.username}.home;
           defaultText = "config.users.users.\${name}.home";
           description = ''
             Specify the path to the user's home directory.
@@ -323,7 +350,21 @@ let
               ])
             );
           default = [ ];
-          apply = map (d: d // { directory = "${attrs.config.home}/${d.directory}"; });
+          apply =
+            definedDirectories:
+            let
+              intermediateDirectorySettings = {
+                how = "_intermediate";
+                configureParent = false;
+                user = attrs.config.username;
+                group = config.users.users.${attrs.config.username}.group;
+                mode = "0755";
+              };
+              allDirectories =
+                mkIntermediateUserDirectories intermediateDirectorySettings attrs.config.files attrs.config.home
+                  definedDirectories;
+            in
+            map (d: d // { directory = concatTwoPaths attrs.config.home d.directory; }) allDirectories;
           description = ''
             Specify a list of directories that should be preserved for this user.
             The paths are interpreted relative to {option}`home`.
@@ -343,7 +384,7 @@ let
               ])
             );
           default = [ ];
-          apply = map (f: f // { file = "${attrs.config.home}/${f.file}"; });
+          apply = map (f: f // { file = concatTwoPaths attrs.config.home f.file; });
           description = ''
             Specify a list of files that should be preserved for this user.
             The paths are interpreted relative to {option}`home`.
@@ -362,7 +403,7 @@ let
         };
         commonMountOptions = lib.mkOption {
           type = with lib.types; listOf (coercedTo str (n: { name = n; }) mountOption);
-          default = [];
+          default = [ ];
           example = [
             "x-gvfs-hide"
             "x-gdu.hide"
@@ -374,6 +415,18 @@ let
             See also the top level {option}`commonMountOptions` and the invdividual
             {option}`mountOptions` that is available per file / directory.
           '';
+        };
+        homeMode = lib.mkOption {
+          type = lib.types.str;
+          default = config.users.users.${attrs.config.username}.homeMode;
+          internal = true;
+          readOnly = true;
+        };
+        homeGroup = lib.mkOption {
+          type = lib.types.str;
+          default = config.users.users.${attrs.config.username}.group;
+          internal = true;
+          readOnly = true;
         };
       };
     };
@@ -443,13 +496,15 @@ let
           '';
         };
         users = lib.mkOption {
-          type = with lib.types; attrsWith {
-            placeholder = "user";
-            elemType = submodule [
-              { commonMountOptions = attrs.config.commonMountOptions; }
-              userModule
-            ];
-          };
+          type =
+            with lib.types;
+            attrsWith {
+              placeholder = "user";
+              elemType = submodule [
+                { commonMountOptions = attrs.config.commonMountOptions; }
+                userModule
+              ];
+            };
           default = { };
           description = ''
             Specify a set of users with corresponding files and directories that
@@ -475,7 +530,7 @@ let
         };
         commonMountOptions = lib.mkOption {
           type = with lib.types; listOf (coercedTo str (n: { name = n; }) mountOption);
-          default = [];
+          default = [ ];
           example = [
             "x-gvfs-hide"
             "x-gdu.hide"
@@ -497,10 +552,12 @@ in
     enable = lib.mkEnableOption "the preservation module";
 
     preserveAt = lib.mkOption {
-      type = with lib.types; attrsWith {
-        placeholder = "path";
-        elemType = submodule preserveAtSubmodule;
-      };
+      type =
+        with lib.types;
+        attrsWith {
+          placeholder = "path";
+          elemType = submodule preserveAtSubmodule;
+        };
       description = ''
         Specify a set of locations and the corresponding state that
         should be preserved there.

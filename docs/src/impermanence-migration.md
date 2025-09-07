@@ -11,6 +11,36 @@ impermanence configuration to Preservation:
 
 The module must be explicitly enabled by setting `preservation.enable` to `true`.
 
+### Handling of existing state
+
+Coming from a setup with impermanence it is important to make sure existing persistent state is preserved
+correctly, meaning the ownership and mode of preservation remains the same. There is no exhaustive list
+of files and directories requiring special treatment but at least the following needs to be considered:
+
+**SSH host keys**
+
+Correct ownership and mode of SSH host keys is very important for sshd to accept connections.
+Getting this wrong, e.g. not restricted enough, may cause your host to become inaccessible via SSH, forcing
+you to use other means of logging into the machine.
+
+The following config may be used to preserve the RSA and Ed25519 host keys with preservation:
+
+```nix
+preservation.preserveAt."/persistent".files = [
+  { file = "/etc/ssh/ssh_host_rsa_key"; how = "symlink"; configureParent = true; }
+  { file = "/etc/ssh/ssh_host_ed25519_key"; how = "symlink"; configureParent = true; }
+];
+```
+
+The above config does not include access modes for the key files because the preservation
+mode is `symlink` and the link's target is not touched by preservation without an explicit
+`createLinkTarget = true`.
+
+**Secrets and other files requiring special access modes**
+
+Any files and directories that need to have a mode that differs from the default (`0644` for files
+and `0755` for directories) must be configured explicitly to avoid having the default mode applied.
+
 ### When to persist
 
 Files and directories that need to be persisted early, must be explicitly configured. For example `/etc/machine-id`:
@@ -46,17 +76,41 @@ preservation.preserveAt."/persistent".files = [
 
 Note that no file is created at the symlink's target, unless `createLinkTarget` is set to `true`.
 
-### Configuration of intermediate path components
+### Intermediate path components
 
-Preservation does not handle any files or directories other than those specifically configured
-to be preserved, and optionally their immediate parent directories (via `configureParent` and
-the `parent` options).
+Any directory that is not preserved itself but is a parent of a preserved file or directory
+is called an intermediate path component here. Regarding the ownership and permissions of these
+intermediate path components, the following needs to be considered.
 
-All missing components of a preserved path that do not already exist, are created by
-systemd-tmpfiles with default ownership `root:root` and mode `0755`.
+#### Intermediate path components of user-specific files and directories
 
-Should such directories require different ownership or mode, the intended way to provision them
-is directly via systemd-tmpfiles.
+Parent directories of a preserved user-specific file or directory that is preserved with the respective
+user as their owner and permissions `0755`. This is the case for all intermediate path components up
+until, but not including, the user's home directory.
+
+**Example**
+
+Consider the following preservation config:
+
+```nix
+preservation.preserveAt."/persistent".users.alice.directories = [
+  ".local/state/nvim"
+];
+```
+
+This config will cause preservation to configure a bind-mount for the subdirectory `nvim`, causing its
+contents to be preserved. The intermediate path components `.local` and `state` will be created if
+necessary, but their contents are not preserved. Owner is set to `alice`, group to alice's primary
+group, i.e. `users.users.alice.group` and the mode is set to `0755`.
+
+
+#### Intermediate path components of system-wide files and directories
+
+For system-wide files and directories, missing components of a preserved path that do not already exist,
+are created by systemd-tmpfiles with default ownership `root:root` and mode `0755`.
+
+Should such directories require different ownership or mode, the intended way to create and configure them
+is via systemd-tmpfiles directly.
 
 **Example**
 

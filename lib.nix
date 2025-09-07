@@ -47,6 +47,71 @@ rec {
     in
     if len < 1 then "/" else concatPaths ([ "/" ] ++ (lib.lists.sublist 0 (len - 1) parts));
 
+  # splits a path on "/", returning a list of non-empty path components
+  parts =
+    path:
+    builtins.foldl' (acc: p: if builtins.isString p && p != "" then acc ++ [ p ] else acc) [ ] (
+      builtins.split "/" path
+    );
+
+  # generates a list of path segments that are parents of the given path
+  # e.g.: for "/foo/bar/baz" this yields [ "foo" "foo/bar" ]
+  parentSegments =
+    path:
+    let
+      # collect all path segments, including the given path itself
+      includingPath = builtins.foldl' (
+        acc: part: if acc == [ ] then [ part ] else ([ (concatTwoPaths (builtins.head acc) part) ] ++ acc)
+      ) [ ] (parts path);
+      # return all path segments except for the given path
+    in
+    builtins.tail includingPath;
+
+  # generates a list of unique path segments that are parents of a given list of paths
+  missingIntermediatePaths =
+    paths:
+    let
+      intermediates = builtins.foldl' (acc: path: acc ++ (parentSegments path)) [ ] paths;
+    in
+    lib.lists.unique (builtins.filter (path: !(builtins.elem path paths)) intermediates);
+
+  # generates a list of attributes to be used in the `directories` option of the `userModule`
+  #
+  # essentially this takes the given lists of configurations for `directories` and `files`,
+  # generates a list of all their unique parent paths and returns a single list of the
+  # given configurations extended by the configurations for their parents, using `defaults`
+  mkIntermediateUserDirectories =
+    defaults: files: prefix: directories:
+    let
+      partitions = builtins.partition (d: d.inInitrd) (files ++ directories);
+      toPaths = map (
+        d: if builtins.hasAttr "file" d then lib.removePrefix prefix d.file else d.directory
+      );
+      intermediateInitrdPaths = missingIntermediatePaths (toPaths partitions.right);
+      intermediateRegularPaths = missingIntermediatePaths (toPaths partitions.wrong);
+      initrdIntermediates = map (
+        p:
+        defaults
+        // {
+          inInitrd = true;
+          directory = p;
+        }
+      ) intermediateInitrdPaths;
+      regularIntermediates = map (
+        p:
+        defaults
+        // {
+          inInitrd = false;
+          directory = p;
+        }
+      ) intermediateRegularPaths;
+    in
+    directories ++ initrdIntermediates ++ regularIntermediates;
+
+  # retrieves the list of directories for all users in a `userModule`
+  getUserDirectories = lib.mapAttrsToList (_: userConfig: userConfig.directories);
+  # retrieves the list of files for all users in a `userModule`
+  getUserFiles = lib.mapAttrsToList (_: userConfig: userConfig.files);
   # retrieves all directories configured in a `preserveAtSubmodule`
   getAllDirectories =
     stateConfig:
@@ -54,16 +119,25 @@ rec {
   # retrieves all files configured in a `preserveAtSubmodule`
   getAllFiles =
     stateConfig: stateConfig.files ++ (builtins.concatLists (getUserFiles stateConfig.users));
-  # retrieves the list of directories for all users in a `preserveAtSubmodule`
-  getUserDirectories = lib.mapAttrsToList (_: userConfig: userConfig.directories);
-  # retrieves the list of files for all users in a `preserveAtSubmodule`
-  getUserFiles = lib.mapAttrsToList (_: userConfig: userConfig.files);
+  # retrieves the list of user configs that preserve any file or directory for all
+  # users in a `preserveAtSubmodule`
+  getNonEmptyUserConfigs =
+    forInitrd: stateConfig:
+    let
+      preservesAny =
+        userConfig: lib.any (def: def.inInitrd == forInitrd) (userConfig.files ++ userConfig.directories);
+      nonEmptyUsers = lib.filterAttrs (_: preservesAny) stateConfig.users;
+    in
+    lib.mapAttrsToList (_: userConfig: userConfig) nonEmptyUsers;
   # filters a list of files or directories, returns only bindmounts
   onlyBindMounts =
     forInitrd: builtins.filter (conf: conf.how == "bindmount" && conf.inInitrd == forInitrd);
   # filters a list of files or directories, returns only symlinks
   onlySymLinks =
     forInitrd: builtins.filter (conf: conf.how == "symlink" && conf.inInitrd == forInitrd);
+  # filters a list of files or directories, returns only intermediate paths
+  onlyIntermediates =
+    forInitrd: builtins.filter (conf: conf.how == "_intermediate" && conf.inInitrd == forInitrd);
 
   # creates tmpfiles.d rules for the `settings` option of the tmpfiles module from a `preserveAtSubmodule`
   mkTmpfilesRules =
@@ -71,13 +145,16 @@ rec {
     let
       allDirectories = getAllDirectories stateConfig;
       allFiles = getAllFiles stateConfig;
+      nonEmptyUserConfigs = getNonEmptyUserConfigs forInitrd stateConfig;
       mountedDirectories = onlyBindMounts forInitrd allDirectories;
+      intermediateDirectories = onlyIntermediates forInitrd allDirectories;
       mountedFiles = onlyBindMounts forInitrd allFiles;
       symlinkedDirectories = onlySymLinks forInitrd allDirectories;
       symlinkedFiles = onlySymLinks forInitrd allFiles;
 
       prefix = if forInitrd then "/sysroot" else "/";
 
+      # directories that are bind-mounted from the persistent prefix
       mountedDirRules = map (
         dirConfig:
         let
@@ -113,6 +190,54 @@ rec {
         }
       ) mountedDirectories;
 
+      # directories that are not persisted themselves
+      intermediateDirRules = map (
+        dirConfig:
+        let
+          persistentDirPath = concatPaths [
+            prefix
+            stateConfig.persistentStoragePath
+            dirConfig.directory
+          ];
+          volatileDirPath = concatPaths [
+            prefix
+            dirConfig.directory
+          ];
+        in
+        {
+          # directory on persistent storage
+          "${persistentDirPath}".d = {
+            inherit (dirConfig) user group mode;
+          };
+          # directory on volatile storage
+          "${volatileDirPath}".d = {
+            inherit (dirConfig) user group mode;
+          };
+        }
+      ) intermediateDirectories;
+
+      # home directories that are not persisted themselves but require
+      # user-specific ownership and permissions on the persistent prefix
+      intermediateHomeRules = map (
+        userConfig:
+        let
+          persistentDirPath = concatPaths [
+            prefix
+            stateConfig.persistentStoragePath
+            userConfig.home
+          ];
+        in
+        {
+          "${persistentDirPath}".d = {
+            user = userConfig.username;
+            group = userConfig.homeGroup;
+            mode = userConfig.homeMode;
+          };
+        }
+
+      ) nonEmptyUserConfigs;
+
+      # files that are bind-mounted from the persistent prefix
       mountedFileRules = map (
         fileConfig:
         let
@@ -132,16 +257,18 @@ rec {
             prefix
             stateConfig.persistentStoragePath
             fileConfig.file
-          ]}".f = {
-            inherit (fileConfig) user group mode;
-          };
+          ]}".f =
+            {
+              inherit (fileConfig) user group mode;
+            };
           # file on volatile storage
           "${concatPaths [
             prefix
             fileConfig.file
-          ]}".f = {
-            inherit (fileConfig) user group mode;
-          };
+          ]}".f =
+            {
+              inherit (fileConfig) user group mode;
+            };
         }
         // lib.optionalAttrs fileConfig.configureParent {
           # parent directory of file on persistent storage
@@ -155,6 +282,7 @@ rec {
         }
       ) mountedFiles;
 
+      # directories are linked to from the volatile prefix
       symlinkedDirRules = map (
         dirConfig:
         let
@@ -196,6 +324,7 @@ rec {
         }
       ) symlinkedDirectories;
 
+      # files are linked to from the volatile prefix
       symlinkedFileRules = map (
         fileConfig:
         let
@@ -237,7 +366,13 @@ rec {
         }
       ) symlinkedFiles;
 
-      rules = mountedDirRules ++ symlinkedDirRules ++ mountedFileRules ++ symlinkedFileRules;
+      rules =
+        mountedDirRules
+        ++ intermediateDirRules
+        ++ intermediateHomeRules
+        ++ symlinkedDirRules
+        ++ mountedFileRules
+        ++ symlinkedFileRules;
     in
     rules;
 
@@ -271,19 +406,27 @@ rec {
         ];
         unitConfig.DefaultDependencies = "no";
         conflicts = [ "umount.target" ];
-        wantedBy = if forInitrd then [
-          "initrd-preservation.target"
-        ] else [
-          "preservation.target"
-        ];
-        before = if forInitrd then [
-          # directory mounts are set up before tmpfiles
-          "systemd-tmpfiles-setup-sysroot.service"
-          "initrd-preservation.target"
-        ] else [
-          "systemd-tmpfiles-setup.service"
-          "preservation.target"
-        ];
+        wantedBy =
+          if forInitrd then
+            [
+              "initrd-preservation.target"
+            ]
+          else
+            [
+              "preservation.target"
+            ];
+        before =
+          if forInitrd then
+            [
+              # directory mounts are set up before tmpfiles
+              "systemd-tmpfiles-setup-sysroot.service"
+              "initrd-preservation.target"
+            ]
+          else
+            [
+              "systemd-tmpfiles-setup.service"
+              "preservation.target"
+            ];
       }) mountedDirectories;
 
       fileMounts = map (fileConfig: {

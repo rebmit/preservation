@@ -29,6 +29,9 @@ in
             { file = "/etc/wpa_supplicant.conf"; how = "symlink"; }
             # some files need to be prepared very early, machine-id is one such case
             { file = "/etc/machine-id"; inInitrd = true; }
+            # persist SSH host keys
+            { file = "/etc/ssh/ssh_host_rsa_key"; how = "symlink"; configureParent = true; }
+            { file = "/etc/ssh/ssh_host_ed25519_key"; how = "symlink"; configureParent = true; }
           ];
           # per-user configuration is possible
           # similar to impermanence this configures ownership for the respective users
@@ -51,9 +54,13 @@ in
                 # this file should be mounted and with the combination of all three
                 # configured `x-foo`, `x-bar` and `x-baz`.
                 { file = "yay_userspace_mount_options"; mountOptions = [ "x-baz" ]; }
+                # a symlinked file in the user's home directory
+                { file = ".toplevel_symlink"; how = "symlink"; }
               ];
               directories = [
                 "unshaved_yaks"
+                "foo/bar/baz"
+                { directory = "symlinked_user_dir"; how = "symlink"; }
               ];
             };
           };
@@ -63,6 +70,9 @@ in
       # systemd-machine-id-commit.service would fail, but it is not relevant
       # in this specific setup for a persistent machine-id so we disable it
       systemd.suppressedSystemUnits = [ "systemd-machine-id-commit.service" ];
+
+      # to test sshd with preserved host keys
+      services.openssh.enable = true;
 
       # test-specific configuration below
 
@@ -138,8 +148,17 @@ in
             assert actual == expected,f"unexpected file attributes\nexpected: {expected}\nactual: {actual}"
 
           case "symlink":
-            # check that symlink was created
-            machine.succeed(f"test -L {path}")
+            # check that file is _not_ mounted
+            machine.fail(f"mountpoint {path}")
+
+          case "_intermediate":
+            # intermediate paths only ever refer to directories
+            machine.succeed(f"test -d {path}")
+
+            # check permissions and ownership
+            actual = machine.succeed(f"stat -c '0%a %U %G' {path} | tee /dev/stderr").strip()
+            expected = "{} {} {}".format("0755",config["user"],config["group"])
+            assert actual == expected,f"unexpected file attributes\nexpected: {expected}\nactual: {actual}"
 
           case x:
             raise Exception(f"Unknown case: {x}")
@@ -181,6 +200,24 @@ in
       with subtest("Type, permissions and ownership after first boot completed"):
         for file in all_files:
           check_file(file)
+
+      with subtest("SSH host keys created at the persistent prefix"):
+        machine.succeed("test -s /state/etc/ssh/ssh_host_rsa_key")
+        machine.succeed("test -s /state/etc/ssh/ssh_host_ed25519_key")
+
+      with subtest("sshd service running"):
+        machine.wait_for_unit("sshd.service")
+
+      with subtest("Unpreserved intermediate user directories have correct permissions and ownership"):
+          for path_segment in [ "foo", "foo/bar" ]:
+            actual = machine.succeed(f"stat -c '0%a %U %G' /home/butz/{path_segment} | tee /dev/stderr").strip()
+            expected = "0755 butz users"
+            assert actual == expected,f"unexpected file attributes\nexpected: {expected}\nactual: {actual}"
+
+      with subtest("Unpreserved user home has same permissions and ownership on persistent prefix as actual user home"):
+          actual = machine.succeed("stat -c '0%a %U %G' /state/home/butz | tee /dev/stderr").strip()
+          expected = machine.succeed("stat -c '0%a %U %G' /home/butz | tee /dev/stderr").strip()
+          assert actual == expected,f"unexpected file attributes\nexpected: {expected}\nactual: {actual}"
 
       with subtest("Files preserved across reboots"):
         # write something in one of the preserved files
