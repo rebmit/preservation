@@ -46,17 +46,41 @@ preservation.preserveAt."/persistent".files = [
 
 Note that no file is created at the symlink's target, unless `createLinkTarget` is set to `true`.
 
-### Configuration of intermediate path components
+### Intermediate path components
 
-Preservation does not handle any files or directories other than those specifically configured
-to be preserved, and optionally their immediate parent directories (via `configureParent` and
-the `parent` options).
+Any directory that is not preserved itself but is a parent of a preserved file or directory
+is called an intermediate path component here. Regarding the ownership and permissions of these
+intermediate path components, the following needs to be considered.
 
-All missing components of a preserved path that do not already exist, are created by
-systemd-tmpfiles with default ownership `root:root` and mode `0755`.
+#### Intermediate path components of user-specific files and directories
 
-Should such directories require different ownership or mode, the intended way to provision them
-is directly via systemd-tmpfiles.
+Parent directories of a preserved user-specific file or directory that is preserved with the respective
+user as their owner and permissions `0755`. This is the case for all intermediate path components up
+until, but not including, the user's home directory.
+
+**Example**
+
+Consider the following preservation config:
+
+```nix
+preservation.preserveAt."/persistent".users.alice.directories = [
+  ".local/state/nvim"
+];
+```
+
+This config will cause preservation to configure a bind-mount for the subdirectory `nvim`, causing its
+contents to be preserved. The intermediate path components `.local` and `state` will be created if
+necessary, but their contents are not preserved. Owner is set to `alice`, group to alice's primary
+group, i.e. `users.users.alice.group` and the mode is set to `0755`.
+
+
+#### Intermediate path components of system-wide files and directories
+
+For system-wide files and directories, missing components of a preserved path that do not already exist,
+are created by systemd-tmpfiles with default ownership `root:root` and mode `0755`.
+
+Should such directories require different ownership or mode, the intended way to create and configure them
+is via systemd-tmpfiles directly.
 
 **Example**
 
