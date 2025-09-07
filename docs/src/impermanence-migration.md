@@ -11,6 +11,36 @@ impermanence configuration to Preservation:
 
 The module must be explicitly enabled by setting `preservation.enable` to `true`.
 
+### Handling of existing state
+
+Coming from a setup with impermanence it is important to make sure existing persistent state is preserved
+correctly, meaning the ownership and mode of preservation remains the same. There is no exhaustive list
+of files and directories requiring special treatment but at least the following needs to be considered:
+
+**SSH host keys**
+
+Correct ownership and mode of SSH host keys is very important for sshd to accept connections.
+Getting this wrong, e.g. not restricted enough, may cause your host to become inaccessible via SSH, forcing
+you to use other means of logging into the machine.
+
+The following config may be used to preserve the RSA and Ed25519 host keys with preservation:
+
+```nix
+preservation.preserveAt."/persistent".files = [
+  { file = "/etc/ssh/ssh_host_rsa_key"; how = "symlink"; configureParent = true; }
+  { file = "/etc/ssh/ssh_host_ed25519_key"; how = "symlink"; configureParent = true; }
+];
+```
+
+The above config does not include access modes for the key files because the preservation
+mode is `symlink` and the link's target is not touched by preservation without an explicit
+`createLinkTarget = true`.
+
+**Secrets and other files requiring special access modes**
+
+Any files and directories that need to have a mode that differs from the default (`0644` for files
+and `0755` for directories) must be configured explicitly to avoid having the default mode applied.
+
 ### When to persist
 
 Files and directories that need to be persisted early, must be explicitly configured. For example `/etc/machine-id`:
