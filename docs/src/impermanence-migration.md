@@ -84,9 +84,9 @@ intermediate path components, the following needs to be considered.
 
 #### Intermediate path components of user-specific files and directories
 
-Parent directories of a preserved user-specific file or directory that is preserved with the respective
-user as their owner and permissions `0755`. This is the case for all intermediate path components up
-until, but not including, the user's home directory.
+Parent directories of a preserved user-specific file or directory are created with the respective
+user as their owner and permissions `0755`. This is the case for all intermediate path components
+up to, but not including, the user's home directory.
 
 **Example**
 
