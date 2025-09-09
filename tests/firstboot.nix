@@ -63,7 +63,7 @@ pkgs:
         machine.reboot()
         machine.wait_for_unit("default.target")
         second_id = machine.succeed("cat /etc/machine-id")
-        assert first_id == second_id,f"machine-id changed: {first_id} -> {second_id}"
+        t.assertEqual(first_id, second_id, "machine-id changed")
 
       with subtest("Second boot does not meet ConditionFirstBoot"):
         machine.require_unit_state("first-boot-complete.target", "inactive")

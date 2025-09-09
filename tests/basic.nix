@@ -145,7 +145,7 @@ in
             # check permissions and ownership
             actual = machine.succeed(f"stat -c '0%a %U %G' {path} | tee /dev/stderr").strip()
             expected = "{} {} {}".format(config["mode"],config["user"],config["group"])
-            assert actual == expected,f"unexpected file attributes\nexpected: {expected}\nactual: {actual}"
+            t.assertEqual(actual, expected, "unexpected file attributes")
 
           case "symlink":
             # check that file is _not_ mounted
@@ -158,7 +158,7 @@ in
             # check permissions and ownership
             actual = machine.succeed(f"stat -c '0%a %U %G' {path} | tee /dev/stderr").strip()
             expected = "{} {} {}".format("0755",config["user"],config["group"])
-            assert actual == expected,f"unexpected file attributes\nexpected: {expected}\nactual: {actual}"
+            t.assertEqual(actual, expected, "unexpected file attributes")
 
           case x:
             raise Exception(f"Unknown case: {x}")
@@ -169,7 +169,7 @@ in
           # check permissions and ownership of parent directory
           actual = machine.succeed(f"stat -c '0%a %U %G' {parent} | tee /dev/stderr").strip()
           expected = "{} {} {}".format(config["mode"],config["user"],config["group"])
-          assert actual == expected,f"unexpected file attributes\nexpected: {expected}\nactual: {actual}"
+          t.assertEqual(actual, expected, "unexpected file attributes")
 
 
       machine.start(allow_reboot=True)
@@ -184,7 +184,7 @@ in
         machine.fail("test -s /sysroot/state/etc/machine-id")
 
         mounts = machine.succeed("mount")
-        assert "/sysroot/etc/machine-id" in mounts, "/sysroot/etc/machine-id not in mounts"
+        t.assertIn("/sysroot/etc/machine-id", mounts, "/sysroot/etc/machine-id not in mounts")
 
       with subtest("Type, permissions and ownership in first boot initrd"):
         for file in initrd_files:
@@ -212,12 +212,12 @@ in
           for path_segment in [ "foo", "foo/bar" ]:
             actual = machine.succeed(f"stat -c '0%a %U %G' /home/butz/{path_segment} | tee /dev/stderr").strip()
             expected = "0755 butz users"
-            assert actual == expected,f"unexpected file attributes\nexpected: {expected}\nactual: {actual}"
+            t.assertEqual(actual, expected, "unexpected file attributes")
 
       with subtest("Unpreserved user home has same permissions and ownership on persistent prefix as actual user home"):
           actual = machine.succeed("stat -c '0%a %U %G' /state/home/butz | tee /dev/stderr").strip()
           expected = machine.succeed("stat -c '0%a %U %G' /home/butz | tee /dev/stderr").strip()
-          assert actual == expected,f"unexpected file attributes\nexpected: {expected}\nactual: {actual}"
+          t.assertEqual(actual, expected, "unexpected file attributes")
 
       with subtest("Files preserved across reboots"):
         # write something in one of the preserved files
@@ -234,11 +234,11 @@ in
         # preserved machine-id resides on /state
         machine.succeed("test -s /sysroot/state/etc/machine-id")
         initrd_machine_id = machine.succeed("cat /sysroot/state/etc/machine-id")
-        assert initrd_machine_id == machine_id, f"machine id changed: {machine_id} -> {initrd_machine_id}"
+        t.assertEqual(initrd_machine_id, machine_id, "machine id changed")
 
         # check that machine-id is already mounted in initrd
         mounts = machine.succeed("mount")
-        assert "/sysroot/etc/machine-id" in mounts, "/sysroot/etc/machine-id not in mounts"
+        t.assertIn("/sysroot/etc/machine-id", mounts, "/sysroot/etc/machine-id not in mounts")
 
         # check type, permissions and ownership before switch root
         for file in initrd_files:
@@ -251,12 +251,12 @@ in
         # check that machine-id remains unchanged in stage-2 after reboot
         machine.succeed("test -s /etc/machine-id")
         new_machine_id = machine.succeed("cat /etc/machine-id")
-        assert new_machine_id == machine_id, f"machine id changed: {machine_id} -> {new_machine_id}"
+        t.assertEqual(new_machine_id, machine_id, "machine id changed")
 
         # check that state in file was also preserved
         machine.succeed("test -s ${butzHome}/bar")
         content = machine.succeed("cat ${butzHome}/bar")
-        assert content == teststring, f"unexpected file content: {content}"
+        t.assertEqual(content, teststring, "unexpected file content")
 
       with subtest("Type, permissions and ownership after reboot"):
         for file in all_files:
@@ -265,7 +265,7 @@ in
       with subtest("Custom (userspace) mount options are applied"):
         utab_entry = machine.succeed("grep TARGET=/home/butz/yay_userspace_mount_options /run/mount/utab")
         for opt in [ "x-foo", "x-bar", "x-baz"]:
-          assert opt in utab_entry,f"{opt} not found in {utab_entry}"
+          t.assertIn(opt, utab_entry, "expected mount option not found")
 
       machine.shutdown()
     '';

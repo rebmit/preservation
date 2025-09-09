@@ -141,10 +141,10 @@ pkgs:
 
       with subtest("/nix/store is backed by dm-verity protected fs"):
         verity_info = machine.succeed("dmsetup info --target verity usr")
-        assert "ACTIVE" in verity_info,f"unexpected verity info: {verity_info}"
+        t.assertIn("ACTIVE", verity_info, "unexpected verity info")
 
         backing_device = machine.succeed("df --output=source /nix/store | tail -n1").strip()
-        assert "/dev/mapper/usr" == backing_device,"unexpected backing device: {backing_device}"
+        t.assertEqual("/dev/mapper/usr", backing_device, "unexpected backing device")
 
       with subtest("Initial boot meets ConditionFirstBoot"):
         machine.require_unit_state("first-boot-complete.target","active")
@@ -158,7 +158,7 @@ pkgs:
         machine.reboot()
         machine.wait_for_unit("default.target")
         second_id = machine.succeed("cat /etc/machine-id")
-        assert first_id == second_id,f"machine-id changed: {first_id} -> {second_id}"
+        t.assertEqual(first_id, second_id, "machine-id changed")
 
       with subtest("Second boot does not meet ConditionFirstBoot"):
         machine.require_unit_state("first-boot-complete.target", "inactive")
