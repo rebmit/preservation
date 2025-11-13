@@ -11,19 +11,14 @@ pkgs:
         enable = true;
         preserveAt."/state" = {
           files = [
-            { file = "/etc/machine-id"; inInitrd = true; how = "symlink"; configureParent = true; }
+            { file = "/etc/machine-id"; inInitrd = true; }
           ];
         };
       };
 
-      systemd.services.systemd-machine-id-commit = {
-        unitConfig.ConditionPathIsMountPoint = [
-          "" "/state/etc/machine-id"
-        ];
-        serviceConfig.ExecStart = [
-          "" "systemd-machine-id-setup --commit --root /state"
-        ];
-      };
+      boot.initrd.systemd.tmpfiles.settings.preservation."/sysroot/state/etc/machine-id".f.argument = "uninitialized";
+
+      systemd.services.systemd-machine-id-commit.unitConfig.ConditionFirstBoot = true;
 
       # test-specific configuration below
       boot.initrd.systemd.enable = true;
@@ -55,7 +50,7 @@ pkgs:
         machine.require_unit_state("first-boot-complete.target","active")
 
       with subtest("Machine ID linked and populated"):
-        machine.succeed("test -L /etc/machine-id")
+        # machine.succeed("test -L /etc/machine-id")
         machine.succeed("test -s /state/etc/machine-id")
 
       with subtest("Machine ID persisted"):
