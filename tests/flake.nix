@@ -19,6 +19,8 @@
               default = pkgs.nixosTest (import ./basic.nix pkgs);
               firstboot = pkgs.nixosTest (import ./firstboot.nix pkgs);
               verity-image = pkgs.nixosTest (import ./appliance-image-verity.nix pkgs);
+              ordering-permission = pkgs.nixosTest (import ./ordering-permission.nix pkgs);
+              ordering-tmpfiles = pkgs.nixosTest (import ./ordering-tmpfiles.nix pkgs);
             };
           };
       };
