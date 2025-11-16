@@ -17,9 +17,19 @@ pkgs:
         enable = true;
         preserveAt."/persistent" = {
           files = [
-            { file = "/etc/machine-id"; inInitrd = true; how = "symlink"; configureParent = true; }
+            {
+              file = "/etc/machine-id";
+              inInitrd = true;
+              how = "symlink";
+              configureParent = true;
+              createLinkTarget = true;
+            }
           ];
         };
+      };
+
+      boot.initrd.systemd.tmpfiles.settings.preservation."/sysroot/persistent/etc/machine-id".f = {
+        argument = "uninitialized";
       };
 
       systemd.services.systemd-machine-id-commit = {
@@ -152,6 +162,8 @@ pkgs:
       with subtest("Machine ID linked and populated"):
         machine.succeed("test -L /etc/machine-id")
         machine.succeed("test -s /persistent/etc/machine-id")
+        machine_id = machine.succeed("cat /etc/machine-id")
+        t.assertNotIn("uninitialized", machine_id, "machine id not populated")
 
       with subtest("Machine ID persisted"):
         first_id = machine.succeed("cat /etc/machine-id")
