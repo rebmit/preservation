@@ -16,8 +16,19 @@ pkgs:
         };
       };
 
-      boot.initrd.systemd.tmpfiles.settings.preservation."/sysroot/persistent/etc/machine-id".f = {
-        argument = "uninitialized";
+      # hack for now to populate /sysroot/persistent/etc/machine-id before bind mount
+      boot.initrd.systemd.services.machine-id = {
+        script = ''
+          if [ ! -s /sysroot/persistent/etc/machine-id ]; then
+            echo "uninitialized" > /sysroot/persistent/etc/machine-id
+          fi
+        '';
+        before = [
+          "sysroot-etc-machine\\x2did.mount"
+          "initrd-preservation.target"
+        ];
+        after = [ "systemd-tmpfiles-setup-preservation.service" ];
+        wantedBy = [ "initrd-preservation.target" ];
       };
 
       systemd.services.systemd-machine-id-commit.unitConfig.ConditionFirstBoot = true;
