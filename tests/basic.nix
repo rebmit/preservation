@@ -138,6 +138,19 @@ in
         file_path = config.get("directory", config.get("file"))
         path = f"{prefix}{file_path}"
 
+        user = "root" if config["user"] == "-" else config["user"]
+        group = "root" if config["group"] == "-" else config["group"]
+
+        if config["mode"] == "-":
+          if config.get("directory", False):
+            mode = "0755"
+          elif config.get("file", False):
+            mode = "0644"
+          else:
+            raise ValueError
+        else:
+          mode = config["mode"]
+
         match config["how"]:
           case "bindmount":
             # check that file is mounted
@@ -145,7 +158,7 @@ in
 
             # check permissions and ownership
             actual = machine.succeed(f"stat -c '0%a %U %G' {path} | tee /dev/stderr").strip()
-            expected = "{} {} {}".format(config["mode"],config["user"],config["group"])
+            expected = "{} {} {}".format(mode, user, group)
             t.assertEqual(actual, expected, "unexpected file attributes")
 
           case "symlink":
@@ -158,7 +171,7 @@ in
 
             # check permissions and ownership
             actual = machine.succeed(f"stat -c '0%a %U %G' {path} | tee /dev/stderr").strip()
-            expected = "{} {} {}".format("0755",config["user"],config["group"])
+            expected = "{} {} {}".format("0755", user, group)
             t.assertEqual(actual, expected, "unexpected file attributes")
 
           case x:
@@ -167,9 +180,23 @@ in
         if config.get("configureParent") == True:
           parent = os.path.dirname(path)
           config = config["parent"]
+
+          user = "root" if config["user"] == "-" else config["user"]
+          group = "root" if config["group"] == "-" else config["group"]
+
+          if config["mode"] == "-":
+            if config.get("directory", False):
+              mode = "0755"
+            elif config.get("file", False):
+              mode = "0644"
+            else:
+              raise ValueError
+          else:
+            mode = config["mode"]
+
           # check permissions and ownership of parent directory
           actual = machine.succeed(f"stat -c '0%a %U %G' {parent} | tee /dev/stderr").strip()
-          expected = "{} {} {}".format(config["mode"],config["user"],config["group"])
+          expected = "{} {} {}".format(mode, user, group)
           t.assertEqual(actual, expected, "unexpected file attributes")
 
 

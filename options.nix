@@ -26,7 +26,12 @@ let
   };
 
   directoryPath =
-    attrs@{ defaultOwner, ... }:
+    {
+      defaultOwner,
+      defaultGroup,
+      defaultMode,
+      ...
+    }@attrs:
     {
       options = {
         directory = lib.mkOption {
@@ -66,7 +71,7 @@ let
         };
         group = lib.mkOption {
           type = lib.types.str;
-          default = config.users.users.${defaultOwner}.group;
+          default = defaultGroup;
           defaultText = "config.users.users.\${defaultOwner}.group";
           description = ''
             Specify the group that owns the directory.
@@ -74,7 +79,7 @@ let
         };
         mode = lib.mkOption {
           type = lib.types.str;
-          default = "0755";
+          default = defaultMode;
           description = ''
             Specify the access mode of the directory.
             See the section `Mode` in {manpage}`tmpfiles.d(5)` for more information.
@@ -113,7 +118,7 @@ let
         };
         parent.group = lib.mkOption {
           type = lib.types.str;
-          default = config.users.users.${defaultOwner}.group;
+          default = defaultGroup;
           defaultText = "config.users.users.\${defaultOwner}.group";
           description = ''
             Specify the group that owns the parent directory of this file.
@@ -174,7 +179,12 @@ let
     };
 
   filePath =
-    attrs@{ defaultOwner, ... }:
+    {
+      defaultOwner,
+      defaultGroup,
+      defaultMode,
+      ...
+    }@attrs:
     {
       options = {
         file = lib.mkOption {
@@ -209,7 +219,7 @@ let
         };
         group = lib.mkOption {
           type = lib.types.str;
-          default = config.users.users.${defaultOwner}.group;
+          default = defaultGroup;
           defaultText = "config.users.users.\${defaultOwner}.group";
           description = ''
             Specify the group that owns the file.
@@ -217,7 +227,7 @@ let
         };
         mode = lib.mkOption {
           type = lib.types.str;
-          default = "0644";
+          default = defaultMode;
           description = ''
             Specify the access mode of the file.
             See the section `Mode` in {manpage}`tmpfiles.d(5)` for more information.
@@ -256,7 +266,7 @@ let
         };
         parent.group = lib.mkOption {
           type = lib.types.str;
-          default = config.users.users.${attrs.defaultOwner}.group;
+          default = defaultGroup;
           defaultText = "config.users.users.\${defaultOwner}.group";
           description = ''
             Specify the group that owns the parent directory of this file.
@@ -343,7 +353,11 @@ let
             listOf (
               coercedTo str (d: { directory = d; }) (submodule [
                 {
-                  _module.args.defaultOwner = attrs.config.username;
+                  _module.args = rec {
+                    defaultOwner = attrs.config.username;
+                    defaultGroup = config.users.users.${defaultOwner}.group;
+                    defaultMode = "0700";
+                  };
                   mountOptions = attrs.config.commonMountOptions;
                 }
                 directoryPath
@@ -377,7 +391,11 @@ let
             listOf (
               coercedTo str (f: { file = f; }) (submodule [
                 {
-                  _module.args.defaultOwner = attrs.config.username;
+                  _module.args = rec {
+                    defaultOwner = attrs.config.username;
+                    defaultGroup = config.users.users.${defaultOwner}.group;
+                    defaultMode = "0600";
+                  };
                   mountOptions = attrs.config.commonMountOptions;
                 }
                 filePath
@@ -450,7 +468,11 @@ let
             listOf (
               coercedTo str (d: { directory = d; }) (submodule [
                 {
-                  _module.args.defaultOwner = "root";
+                  _module.args = {
+                    defaultOwner = "-";
+                    defaultGroup = "-";
+                    defaultMode = "-";
+                  };
                   mountOptions = attrs.config.commonMountOptions;
                 }
                 directoryPath
@@ -469,7 +491,11 @@ let
             listOf (
               coercedTo str (f: { file = f; }) (submodule [
                 {
-                  _module.args.defaultOwner = "root";
+                  _module.args = {
+                    defaultOwner = "-";
+                    defaultGroup = "-";
+                    defaultMode = "-";
+                  };
                   mountOptions = attrs.config.commonMountOptions;
                 }
                 filePath
