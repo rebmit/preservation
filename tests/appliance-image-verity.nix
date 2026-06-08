@@ -95,6 +95,7 @@ pkgs:
           };
           "/nix/store" = {
             device = "/usr/nix/store";
+            fsType = "none";
             options = [ "bind" ];
           };
           "/persistent" = {
@@ -105,8 +106,6 @@ pkgs:
           };
         };
       };
-
-      nixpkgs.hostPlatform = pkgs.stdenv.hostPlatform;
     };
 
   testScript =
@@ -125,7 +124,7 @@ pkgs:
         "-f",
         "qcow2",
         "-b",
-        "${nodes.machine.system.build.finalImage}/${nodes.machine.image.fileName}",
+        "${nodes.machine.system.build.image}/${nodes.machine.image.fileName}",
         "-F",
         "raw",
         tmp_disk_image.name,
