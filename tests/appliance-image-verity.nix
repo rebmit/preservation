@@ -82,31 +82,27 @@ pkgs:
         passwordFilesLocation = "/persistent/etc";
       };
 
+      fileSystems = {
+        "/" = {
+          fsType = "tmpfs";
+          options = [ "mode=0755" ];
+        };
+        "/persistent" = {
+          device = "/dev/vdb";
+          fsType = "ext4";
+          neededForBoot = true;
+          autoFormat = true;
+        };
+      };
+
       virtualisation = {
         memorySize = 2048;
         emptyDiskImages = [ 23 ];
         directBoot.enable = false;
         mountHostNixStore = false;
         useEFIBoot = true;
-        fileSystems = lib.mkVMOverride {
-          "/" = {
-            fsType = "tmpfs";
-            options = [ "mode=0755" ];
-          };
-          "/nix/store" = {
-            device = "/usr/nix/store";
-            options = [ "bind" ];
-          };
-          "/persistent" = {
-            device = "/dev/vdb";
-            fsType = "ext4";
-            neededForBoot = true;
-            autoFormat = true;
-          };
-        };
+        fileSystems = lib.mkVMOverride { };
       };
-
-      nixpkgs.hostPlatform = pkgs.stdenv.hostPlatform;
     };
 
   testScript =
@@ -125,7 +121,7 @@ pkgs:
         "-f",
         "qcow2",
         "-b",
-        "${nodes.machine.system.build.finalImage}/${nodes.machine.image.fileName}",
+        "${nodes.machine.system.build.image}/${nodes.machine.image.fileName}",
         "-F",
         "raw",
         tmp_disk_image.name,
